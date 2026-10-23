@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ART QUEST ROOM</title>
+<style>
+  :root{ --gold:#f5c542; --gold-deep:#c99a1e; --ink:#2b2340; }
+  html,body{margin:0;background:#f7f1e6;color:var(--ink);
+    font-family:"Hiragino Maru Gothic ProN","Zen Maru Gothic","Meiryo",sans-serif}
+  body{padding-bottom:84px}
+  header{text-align:center;padding:28px 16px 8px}
+  header .no{font-size:13px;letter-spacing:.3em;color:#8a7b9c}
+  header h1{margin:4px 0 2px;font-size:24px}
+  header p{margin:0;font-size:14px;color:#6b5f7a}
+
+  /* 展示室：鍵はこの枠の中に座標で置く */
+  #stage{position:relative;max-width:900px;margin:16px auto;padding:0 16px}
+  #wall{position:relative;border-radius:16px;overflow:hidden;background:var(--wall-bg,#efe6d4);
+    background-size:cover;background-position:center;padding:6% 4%}
+  .works{display:grid;grid-template-columns:1fr 1fr;gap:5%}
+  @media (max-width:560px){ .works{grid-template-columns:1fr;gap:28px} }
+  figure{margin:0;text-align:center}
+  figure img{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:6px;
+    box-shadow:0 8px 24px rgba(0,0,0,.25);border:8px solid #fff;box-sizing:border-box;cursor:zoom-in}
+  figcaption{margin-top:10px;font-size:14px}
+  figcaption small{display:block;color:#7a6f88;font-size:12px;margin-top:2px}
+
+  /* 鍵 */
+  #key{position:absolute;width:48px;height:24px;transform:translate(-50%,-50%);cursor:pointer;
+    filter:drop-shadow(0 0 6px rgba(245,197,66,.9));animation:float 2.4s ease-in-out infinite;z-index:3;
+    background:none;border:none;padding:0}
+  #key svg{width:100%;height:100%}
+  @keyframes float{50%{transform:translate(-50%,-62%) rotate(-8deg)}}
+  #key.got{animation:fly .9s forwards;pointer-events:none}
+  @keyframes fly{to{transform:translate(-50%,-260%) scale(1.6);opacity:0}}
+
+  /* 鍵GET表示 */
+  #getmsg{white-space:nowrap;position:fixed;left:50%;top:40%;transform:translate(-50%,-50%) scale(.6);
+    background:var(--gold);color:#3a2a00;font-weight:bold;font-size:24px;padding:16px 32px;border-radius:999px;
+    opacity:0;pointer-events:none;transition:.35s cubic-bezier(.3,1.6,.5,1);z-index:20;
+    box-shadow:0 0 40px rgba(245,197,66,.8)}
+  #getmsg.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+  /* 下の金色バー（出しっぱなし） */
+  #bar{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;align-items:center;justify-content:center;gap:10px;
+    padding:14px 16px calc(14px + env(safe-area-inset-bottom));
+    background:linear-gradient(#f8d669,var(--gold-deep));color:#3a2a00;font-weight:bold;font-size:16px;
+    text-decoration:none;box-shadow:0 -4px 16px rgba(0,0,0,.2)}
+  #bar .state{font-size:12px;font-weight:normal;background:rgba(255,255,255,.5);border-radius:999px;padding:2px 10px}
+  #bar.ready{animation:shine 1.8s infinite}
+  @keyframes shine{50%{filter:brightness(1.15)}}
+
+  /* 拡大表示 */
+  #zoom{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:30;cursor:zoom-out}
+  #zoom.show{display:flex}
+  #zoom img{max-width:92vw;max-height:88vh;border-radius:6px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="no" id="roomNo"></div>
+  <h1 id="artist"></h1>
+  <p id="message"></p>
+</header>
+
+<div id="stage">
+  <div id="wall">
+    <div class="works" id="works"></div>
+    <button id="key" aria-label="鍵をひろう">
+      <svg viewBox="0 0 40 20"><circle cx="8" cy="10" r="6.5" fill="none" stroke="#f5c542" stroke-width="3.5"/>
+        <rect x="14" y="8.2" width="24" height="3.6" fill="#f5c542"/>
+        <rect x="30" y="11" width="3.5" height="6" fill="#f5c542"/><rect x="24" y="11" width="3.5" height="4.5" fill="#f5c542"/></svg>
+    </button>
+  </div>
+</div>
+
+<a id="bar" href="#">地図に戻って記録する <span class="state" id="barState">鍵をさがしてね</span></a>
+<div id="getmsg">🔑 鍵をGET！</div>
+<div id="zoom"><img alt=""></div>
+
+<script>
+/* ===================== この部屋の設定（ここだけ書き換える） ===================== */
+const ROOM = {
+  key: "01",                    // 鍵番号 01〜15
+  keyX: 50,                     // 鍵の位置 横（%）0=左端 100=右端
+  keyY: 8,                      // 鍵の位置 縦（%）0=上端 100=下端
+  mapUrl: "../map/index.html",  // 地図のURL（本番は https://〜.github.io/〜/ ）
+  artist: "作家名",
+  message: "ようこそ。ゆっくりご覧ください。",
+  wallBg: "",                   // 背景画像URL（空なら無地）※背景カスタム版で使用
+  works: [
+    { img: "", title: "作品タイトル1", note: "ひとこと" },
+    { img: "", title: "作品タイトル2", note: "ひとこと" }
+  ]
+};
+/* ============================================================================ */
+
+const GOT_KEY = "artquest_room_got_" + ROOM.key; // この部屋で取ったかどうか（部屋側の記憶）
+
+function placeholder(i){
+  const c = [["#7b6fd6","#2b2f63"],["#ffb6c9","#f5c542"]][i%2];
+  return "data:image/svg+xml;utf8," + encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 400'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${c[0]}'/><stop offset='1' stop-color='${c[1]}'/></linearGradient></defs><rect width='300' height='400' fill='url(#g)'/><text x='150' y='210' text-anchor='middle' font-size='28' fill='#fff' font-family='sans-serif'>WORK ${i+1}</text></svg>`);
+}
+
+// 表示
+document.title = `ART QUEST ROOM ${ROOM.key}`;
+document.getElementById("roomNo").textContent = `ROOM ${ROOM.key}`;
+document.getElementById("artist").textContent = ROOM.artist;
+document.getElementById("message").textContent = ROOM.message;
+if(ROOM.wallBg) document.getElementById("wall").style.setProperty("--wall-bg", `url("${ROOM.wallBg}")`);
+
+const works = document.getElementById("works");
+ROOM.works.forEach((w,i)=>{
+  const f = document.createElement("figure");
+  const img = document.createElement("img");
+  img.src = w.img || placeholder(i); img.alt = w.title;
+  img.onclick = ()=>{ const z=document.getElementById("zoom"); z.querySelector("img").src=img.src; z.classList.add("show"); };
+  const cap = document.createElement("figcaption");
+  cap.textContent = w.title;
+  const sm = document.createElement("small"); sm.textContent = w.note; cap.appendChild(sm);
+  f.append(img, cap); works.appendChild(f);
+});
+document.getElementById("zoom").onclick = e=> e.currentTarget.classList.remove("show");
+
+// 鍵
+const keyBtn = document.getElementById("key");
+keyBtn.style.left = ROOM.keyX + "%";
+keyBtn.style.top  = ROOM.keyY + "%";
+
+const bar = document.getElementById("bar"), barState = document.getElementById("barState");
+function mapLink(withKey){
+  const u = new URL(ROOM.mapUrl, location.href);
+  if(withKey) u.searchParams.set("key", ROOM.key);
+  return u.href;
+}
+function setGot(){
+  keyBtn.style.display = "none";
+  bar.href = mapLink(true);
+  bar.classList.add("ready");
+  barState.textContent = `🔑 鍵${ROOM.key} 持ってる`;
+}
+
+let got = false;
+try{ got = localStorage.getItem(GOT_KEY) === "1"; }catch(e){}
+if(got) setGot(); else bar.href = mapLink(false);
+
+keyBtn.addEventListener("click", ()=>{
+  try{ localStorage.setItem(GOT_KEY, "1"); }catch(e){}
+  keyBtn.classList.add("got");
+  const m = document.getElementById("getmsg");
+  m.classList.add("show");
+  setTimeout(()=>m.classList.remove("show"), 1600);
+  setTimeout(setGot, 900);
+});
+</script>
+</body>
+</html>
